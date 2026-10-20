@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verify email · myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div th:replace="~{fragments/icons :: sprite}"></div>
+<div class="auth-page">
+    <section class="auth-art">
+        <div>
+            <a class="brand" th:href="@{/login}">
+                <svg class="icon"><use href="#i-cube"></use></svg><span>myPaaS</span>
+            </a>
+            <h2>A verified identity, a smaller blast radius.</h2>
+            <p>Email verification is required before password login and security notifications. Verification tokens are single-use, expiring and stored only as hashes.</p>
+        </div>
+        <p style="font-size:12.5px;color:#64748b;margin:0">Audited security changes · OTP step-up · Versioned envelope encryption</p>
+    </section>
+    <section class="auth-form-wrap">
+        <div class="auth-card">
+            <a class="brand" th:href="@{/login}">
+                <svg class="icon"><use href="#i-cube"></use></svg><span>myPaaS</span>
+            </a>
+            <h1 th:text="${verified ? 'Email verified' : 'Verification failed'}">Email verified</h1>
+            <p class="sub" th:if="${verified}">Your email address is confirmed. You can sign in again.</p>
+            <p class="sub" th:if="${error}" th:text="${error}">The link is invalid or expired.</p>
+            <a class="btn primary auth-submit" th:href="@{/login}" style="display:flex">Continue to sign in</a>
+        </div>
+    </section>
+</div>
+</body>
+</html>

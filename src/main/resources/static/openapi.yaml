@@ -1,0 +1,582 @@
+openapi: 3.0.3
+info:
+  title: myPaaS API
+  version: 1.0.0
+  description: |
+    The myPaaS control-plane API. The dashboard, REST clients and webhook
+    handlers cross the same application-service seams and authorization checks.
+    Every listed operation has a `/api/v1` route.
+
+    Authentication: `POST /api/v1/auth/login` returns a 15-minute JWT access
+    token and a rotating refresh token. Send the access token as
+    `Authorization: Bearer <token>`. Sensitive actions also require a
+    single-use step-up grant in `X-Step-Up-Grant`.
+
+    Deployment creation accepts an optional `Idempotency-Key` header, scoped to
+    actor and project. Secret values are never returned by read APIs.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Projects
+  - name: Deployments
+  - name: Files
+  - name: Servers
+  - name: Certificates
+  - name: Operations
+  - name: Integrations
+  - name: Audit
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Password login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204': { description: Revoked }
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user and visible projects
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, format: int64 }
+                  email: { type: string }
+                  displayName: { type: string }
+                  role: { type: string, enum: [ADMIN, DEVELOPER, VIEWER] }
+                  projects:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProjectRef' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/v1/auth/step-up/begin:
+    post:
+      tags: [Auth]
+      summary: Begin an OTP step-up challenge for a sensitive action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, resourceType]
+              properties:
+                action: { type: string, example: FILE_DELETE }
+                resourceType: { type: string, enum: [GLOBAL, SERVER, PROJECT, DEPLOYMENT, FILE, CERTIFICATE, USER, CREDENTIAL] }
+                resourceId: { type: integer, format: int64, nullable: true }
+      responses:
+        '200':
+          description: Challenge issued and OTP delivered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  action: { type: string }
+                  resource:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      id: { type: integer, format: int64, nullable: true }
+                  expiresAt: { type: integer, format: int64 }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/v1/auth/step-up/complete:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and mint a single-use grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, code]
+              properties:
+                challengeId: { type: string }
+                code: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        '200':
+          description: Grant issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value: { type: string, description: Send as X-Step-Up-Grant on the retry }
+                  expiresAt: { type: integer, format: int64 }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/projects:
+    get:
+      tags: [Projects]
+      summary: List visible projects
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        '200':
+          description: Page of projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Project' } }
+                  page: { type: integer }
+                  size: { type: integer }
+                  total: { type: integer, format: int64 }
+    post:
+      tags: [Projects]
+      summary: Create a project with its first configuration revision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProject' }
+      responses:
+        '201': { description: Created }
+        '422': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Projects]
+      summary: Get a project and its latest configuration revision
+      responses:
+        '200': { description: Project detail }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Projects]
+      summary: Update project display fields
+      responses:
+        '200': { description: Updated }
+  /api/v1/projects/{projectId}/configuration:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Projects]
+      summary: Get the latest immutable configuration revision
+      responses:
+        '200': { description: Revision }
+    put:
+      tags: [Projects]
+      summary: Save a new immutable configuration revision
+      responses:
+        '200': { description: New revision }
+        '422': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/toggles:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    put:
+      tags: [Projects]
+      summary: Update feature toggles by creating a revision
+      responses:
+        '200': { description: New revision }
+  /api/v1/projects/{projectId}/environment:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Projects]
+      summary: Read environment entries (literal values and credential references)
+      responses:
+        '200': { description: Environment entries }
+    put:
+      tags: [Projects]
+      summary: Replace environment entries (sensitive; requires step-up)
+      responses:
+        '200': { description: New revision }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/projects/{projectId}/deployments:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Deployments]
+      summary: Deployment history for a project
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, default: 25 } }
+      responses:
+        '200': { description: Page of deployments }
+    post:
+      tags: [Deployments]
+      summary: Queue a deployment (returns promptly)
+      parameters:
+        - { in: header, name: Idempotency-Key, schema: { type: string, maxLength: 160 } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ref: { type: string, nullable: true, description: Branch, tag or commit override recorded on the deployment }
+                force: { type: boolean, default: false }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, format: int64 }
+                  state: { type: string }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /api/v1/deployments/{deploymentId}:
+    parameters:
+      - { in: path, name: deploymentId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Deployments]
+      summary: Deployment status, steps and recent logs
+      responses:
+        '200': { description: Status }
+  /api/v1/deployments/{deploymentId}/logs:
+    parameters:
+      - { in: path, name: deploymentId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Deployments]
+      summary: Authorized deployment log page
+      parameters:
+        - { in: query, name: from, schema: { type: integer, format: int64, default: 0 }, description: Sequence cursor }
+      responses:
+        '200': { description: Log entries }
+  /api/v1/deployments/{deploymentId}/logs/stream:
+    parameters:
+      - { in: path, name: deploymentId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Deployments]
+      summary: Server-sent events log stream
+      responses:
+        '200':
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /api/v1/deployments/{deploymentId}/cancel:
+    parameters:
+      - { in: path, name: deploymentId, required: true, schema: { type: integer, format: int64 } }
+    post:
+      tags: [Deployments]
+      summary: Cancel a deployment (idempotent)
+      responses:
+        '200': { description: Status after cancellation request }
+  /api/v1/deployments/{deploymentId}/rollback:
+    parameters:
+      - { in: path, name: deploymentId, required: true, schema: { type: integer, format: int64 } }
+    post:
+      tags: [Deployments]
+      summary: Activate the release active immediately before the referenced terminal deployment
+      responses:
+        '202': { description: Rollback deployment queued }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/projects/{projectId}/files:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Files]
+      summary: List stored files
+      responses:
+        '200': { description: Files }
+    post:
+      tags: [Files]
+      summary: Upload a bounded, checksummed file outside the web root
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Stored file metadata }
+        '413': { $ref: '#/components/responses/Error' }
+  /api/v1/files/{fileId}/content:
+    parameters:
+      - { in: path, name: fileId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Files]
+      summary: Download file content (sensitive and certificate material is refused)
+      responses:
+        '200': { description: File bytes }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/v1/files/{fileId}:
+    parameters:
+      - { in: path, name: fileId, required: true, schema: { type: integer, format: int64 } }
+    delete:
+      tags: [Files]
+      summary: Delete a file (sensitive; requires step-up)
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/servers:
+    get:
+      tags: [Servers]
+      summary: List visible managed servers
+      responses:
+        '200': { description: Servers }
+    post:
+      tags: [Servers]
+      summary: Register a managed server with a pinned host key
+      responses:
+        '201': { description: Server registered }
+  /api/v1/servers/{serverId}/verify:
+    parameters:
+      - { in: path, name: serverId, required: true, schema: { type: integer, format: int64 } }
+    post:
+      tags: [Servers]
+      summary: Verify connectivity and cache capabilities
+      responses:
+        '200': { description: Verified server }
+
+  /api/v1/certificates:
+    get:
+      tags: [Certificates]
+      summary: List certificate metadata (never private keys)
+      responses:
+        '200': { description: Certificates }
+    post:
+      tags: [Certificates]
+      summary: Register a certificate chain and matching private key (sensitive; requires step-up)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chainPem, privateKeyPem, hostnames]
+              properties:
+                chainPem: { type: string }
+                privateKeyPem: { type: string, description: PKCS#8 PEM }
+                hostnames:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201': { description: Certificate registered }
+        '422': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/domains:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Certificates]
+      summary: List hostname assignments and certificate status
+      responses:
+        '200': { description: Domains }
+    post:
+      tags: [Certificates]
+      summary: Claim a hostname inside the managed namespace
+      responses:
+        '200': { description: Assignment }
+  /api/v1/projects/{projectId}/domains/{hostname}/certificate:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+      - { in: path, name: hostname, required: true, schema: { type: string } }
+    put:
+      tags: [Certificates]
+      summary: Select a certificate for a hostname and enqueue converge
+      responses:
+        '204': { description: Selected }
+
+  /api/v1/projects/{projectId}/monitoring:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Operations]
+      summary: Metric series, health results and alert rules
+      responses:
+        '200': { description: Monitoring view }
+  /api/v1/projects/{projectId}/analytics:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Operations]
+      summary: Request, page-view and click analytics
+      responses:
+        '200': { description: Analytics view }
+  /api/v1/projects/{projectId}/alerts:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Operations]
+      summary: List project alert rules
+      responses:
+        '200': { description: Alert rules }
+    post:
+      tags: [Operations]
+      summary: Upsert a project alert rule
+      responses:
+        '200': { description: Rule id }
+  /api/v1/audit:
+    get:
+      tags: [Audit]
+      summary: Scoped, append-only audit query (administrators)
+      parameters:
+        - { in: query, name: action, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, default: 25 } }
+      responses:
+        '200': { description: Audit entries }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/webhooks/{projectSlug}/{provider}:
+    post:
+      tags: [Integrations]
+      summary: Signature-verified webhook delivery (generic HMAC or GitHub)
+      security: []
+      parameters:
+        - { in: path, name: projectSlug, required: true, schema: { type: string } }
+        - { in: path, name: provider, required: true, schema: { type: string, enum: [generic, github] } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '202': { description: Deployment queued }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /tracking/v1/event:
+    post:
+      tags: [Integrations]
+      summary: Public, rate-limited page-view/click tracking
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [trackingKey, type, path, hostname]
+              properties:
+                trackingKey: { type: string }
+                type: { type: string, enum: [PAGE_VIEW, CLICK] }
+                path: { type: string, maxLength: 500 }
+                hostname: { type: string }
+      responses:
+        '202': { description: Accepted }
+        '422': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: API error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresInSeconds: { type: integer, format: int64 }
+    ProjectRef:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        slug: { type: string }
+    Project:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        serverId: { type: integer, format: int64 }
+        latestRevisionId: { type: integer, format: int64, nullable: true }
+        trackingKey: { type: string }
+    CreateProject:
+      type: object
+      required: [name, slug, serverId, configuration]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        serverId: { type: integer, format: int64 }
+        configuration: { type: object }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            violations:
+              type: array
+              items: { type: string }
+            action: { type: string, nullable: true }
+            resourceType: { type: string, nullable: true }
+            resourceId: { type: integer, format: int64, nullable: true }
+security:
+  - bearerAuth: []

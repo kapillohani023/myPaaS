@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <title>myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div th:replace="~{fragments/icons :: sprite}"></div>
+<header class="topbar">
+    <div class="shell">
+        <a class="brand" th:href="@{/dashboard}">
+            <svg class="icon"><use href="#i-cube"></use></svg>
+            <span>myPaaS</span>
+        </a>
+        <div class="topbar-right">
+            <form th:action="@{/logout}" method="post"><button class="btn" type="submit">Logout</button></form>
+        </div>
+    </div>
+</header>
+<main class="page">
+    <div class="shell">
+        <div class="card empty-wrap">
+            <div class="mark"><svg class="icon"><use href="#i-cube"></use></svg></div>
+            <h1>No projects yet</h1>
+            <p>Create a project with <span class="mono">POST /api/v1/projects</span> to start deploying. Project configuration is immutable per revision, so every deployment stays reproducible.</p>
+        </div>
+    </div>
+</main>
+</body>
+</html>

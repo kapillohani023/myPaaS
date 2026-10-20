@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Something went wrong · myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div th:replace="~{fragments/icons :: sprite}"></div>
+<main class="page">
+    <div class="shell">
+        <div class="card empty-wrap">
+            <div class="mark"><svg class="icon"><use href="#i-alert"></use></svg></div>
+            <h1 th:text="${status}">500</h1>
+            <p th:text="${error ?: 'The request could not be completed.'}">The request could not be completed.</p>
+            <div style="margin-top:22px"><a class="btn" th:href="@{/dashboard}">Back to dashboard</a></div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

@@ -31,3 +31,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### myPaaS runtime data (keys, storage, H2 DB) ###
+data/
+*.log
+
+### Local environment files (never commit filled-in secrets) ###
+.env
+*.env
+!*.env.example

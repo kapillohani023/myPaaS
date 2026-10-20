@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dev mailbox · myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div th:replace="~{fragments/icons :: sprite}"></div>
+<header class="topbar">
+    <div class="shell">
+        <a class="brand" th:href="@{/dashboard}">
+            <svg class="icon"><use href="#i-cube"></use></svg>
+            <span>myPaaS</span>
+        </a>
+        <div class="topbar-center" style="margin-left:24px;margin-right:auto">
+            <span class="badge plain">Capture mode</span>
+            <span class="muted" style="font-size:12.5px">Email delivery is captured locally, not sent over SMTP.</span>
+        </div>
+        <div class="topbar-right">
+            <a class="btn" th:href="@{/dashboard}">Back to dashboard</a>
+        </div>
+    </div>
+</header>
+<main class="page">
+    <div class="shell">
+        <div class="mailbox">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+                <span class="section-icon" style="width:38px;height:38px;border-radius:8px;background:var(--blue-50);color:var(--blue);display:grid;place-items:center">
+                    <svg class="icon"><use href="#i-mail"></use></svg>
+                </span>
+                <div>
+                    <h1 style="font-size:24px">Dev mailbox</h1>
+                    <p class="muted" style="font-size:13.5px">Captured notification and verification emails (demo mode). Accessible to administrators only.</p>
+                </div>
+            </div>
+            <div class="card mail" th:each="message : ${messages}">
+                <div class="mail-head">
+                    <strong th:text="${message.subject}">Your verification code</strong>
+                    <span class="to" th:text="'to ' + ${message.to}">to john@example.com</span>
+                </div>
+                <pre th:text="${message.body}">Hello, your code is 123456.</pre>
+            </div>
+            <div class="card empty-state" th:if="${#lists.isEmpty(messages)}">
+                <svg class="icon"><use href="#i-mail"></use></svg>
+                <div>No captured emails yet. Start a step-up action to receive a code.</div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

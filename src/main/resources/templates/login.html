@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in · myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div th:replace="~{fragments/icons :: sprite}"></div>
+<div class="auth-page">
+    <section class="auth-art">
+        <div>
+            <a class="brand" th:href="@{/login}">
+                <svg class="icon"><use href="#i-cube"></use></svg>
+                <span>myPaaS</span>
+            </a>
+            <h2>Deploy with confidence. Own every release.</h2>
+            <p>Servers, projects, build pipelines and TLS in one quiet control plane. Every deployment is pinned to an immutable configuration revision.</p>
+        </div>
+        <div class="auth-console">
+            <div class="bar"><i></i><i></i><i></i></div>
+            <pre>[14:32:10] <span class="ok">INFO</span> Starting deployment for commit a1b2c3d
+[14:32:11] <span class="ok">INFO</span> Pulling latest changes from origin/main
+[14:32:20] <span class="ok">INFO</span> Build completed successfully
+[14:32:22] <span class="ok">INFO</span> Starting application service
+[14:32:24] <span class="ok">INFO</span> Health check passed
+[14:32:24] <span class="ok">INFO</span> Deployment completed successfully</pre>
+        </div>
+        <p style="font-size:12.5px;color:#64748b;margin:0">Single control plane · PostgreSQL-backed durable jobs · Envelope-encrypted secrets</p>
+    </section>
+
+    <section class="auth-form-wrap">
+        <div class="auth-card">
+            <a class="brand" th:href="@{/login}">
+                <svg class="icon"><use href="#i-cube"></use></svg>
+                <span>myPaaS</span>
+            </a>
+            <h1>Welcome back</h1>
+            <p class="sub">Sign in to manage your servers and deployments.</p>
+
+            <div class="auth-alert error" th:if="${param.error}">
+                Invalid email or password, or your account requires verification.
+            </div>
+            <div class="auth-alert ok" th:if="${param.logout}">
+                You have been signed out.
+            </div>
+            <div class="auth-alert ok" th:if="${param.reset}">
+                Your password was reset. Sign in with the new password.
+            </div>
+            <div class="auth-alert ok" th:if="${param.verified}">
+                Your email address was verified.
+            </div>
+            <div class="auth-alert ok" th:if="${param.passwordChanged}">
+                Password changed. Sign in with your new password.
+            </div>
+
+            <form th:action="@{/login}" method="post">
+                <input type="hidden" name="_csrf" th:value="${csrfTokenValue}">
+                <div class="field">
+                    <label for="username">Email</label>
+                    <input id="username" name="username" type="email" class="input"
+                           placeholder="john@example.com" autocomplete="username" required autofocus>
+                </div>
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" class="input"
+                           placeholder="••••••••••••" autocomplete="current-password" required>
+                </div>
+                <button class="btn primary auth-submit" type="submit">Sign in</button>
+            </form>
+            <div style="text-align:right;margin-top:12px">
+                <a th:href="@{/forgot-password}" style="font-size:13px;font-weight:500">Forgot password?</a>
+            </div>
+
+            <div class="demo-hint" th:if="${demoMode}">
+                Demo administrator:<br>
+                <code th:text="${demoEmail}">john@example.com</code> /
+                <code th:text="${demoPassword}">mypaas-demo!</code><br>
+                Demo data is enabled. Set <code>mypaas.demo-seed=false</code> for production.
+            </div>
+
+            <div class="auth-foot">
+                <svg class="icon icon-xs"><use href="#i-lock"></use></svg>
+                <span>Private by default. No open registration.</span>
+            </div>
+        </div>
+    </section>
+</div>
+</body>
+</html>

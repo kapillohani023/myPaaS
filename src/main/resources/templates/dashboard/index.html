@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf" th:content="${csrfToken}">
+    <meta name="_csrf_header" th:content="${csrfHeader}">
+    <title th:text="${project.name} + ' · myPaaS'">myapp · myPaaS</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body th:attr="data-project-id=${project.id},data-project-name=${project.name},data-demo=${demoMode},data-user-email=${user.email},data-log-deployment=${latestDeploymentId},data-latest-state=${latestState}">
+
+<div th:replace="~{fragments/icons :: sprite}"></div>
+
+<header class="topbar">
+    <div class="shell">
+        <a class="brand" th:href="@{/dashboard}">
+            <svg class="icon"><use href="#i-cube"></use></svg>
+            <span>myPaaS</span>
+        </a>
+
+        <div class="topbar-center">
+            <div class="select-pill">
+                <svg class="icon"><use href="#i-server"></use></svg>
+                <select aria-label="Server" onchange="if (this.value) location.href='/dashboard/servers/' + this.value">
+                    <option th:each="s : ${servers}" th:value="${s.id}" th:text="${s.name}"
+                            th:selected="${s.id == project.serverId}"></option>
+                </select>
+                <svg class="icon chev"><use href="#i-chevron"></use></svg>
+            </div>
+            <div class="select-pill">
+                <svg class="icon"><use href="#i-cube"></use></svg>
+                <select aria-label="Project" onchange="if (this.value) location.href='/dashboard/projects/' + this.value">
+                    <option th:each="p : ${projects}" th:value="${p.id}" th:text="${p.name}"
+                            th:selected="${p.id == project.id}"></option>
+                </select>
+                <svg class="icon chev"><use href="#i-chevron"></use></svg>
+            </div>
+        </div>
+
+        <div class="topbar-right">
+            <button class="avatar" type="button" onclick="toggleAvatarMenu(event)" aria-label="Account menu"
+                    th:text="${user.initial}">J</button>
+            <div class="avatar-menu" id="avatarMenu">
+                <button type="button" onclick="openModal('filesModal')">
+                    <svg class="icon"><use href="#i-folder"></use></svg> My Files
+                </button>
+                <button type="button" onclick="openModal('settingsModal')">
+                    <svg class="icon"><use href="#i-settings"></use></svg> Settings
+                </button>
+                <div class="menu-sep"></div>
+                <form th:action="@{/logout}" method="post" style="margin:0">
+                    <button type="submit">
+                        <svg class="icon"><use href="#i-logout"></use></svg> Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="page">
+    <div class="shell">
+        <div class="notice" th:if="${notice}" th:text="${notice}"></div>
+        <div class="notice error" th:if="${error}" th:text="${error}"></div>
+
+        <section class="card project-hero">
+            <div class="project-head">
+                <div class="project-mark">
+                    <svg class="icon"><use href="#i-cube"></use></svg>
+                </div>
+                <div>
+                    <div class="project-title-row">
+                        <h1 class="project-title" th:text="${project.name}">myapp</h1>
+                        <span class="badge" th:classappend="' ' + ${project.statusClass}" th:text="${project.status}">Running</span>
+                    </div>
+                    <div class="project-meta">
+                        <span th:text="${project.serverName}">Production Server</span>
+                        <span class="sep"></span>
+                        <span th:text="${project.serverOs}">ubuntu-22.04</span>
+                        <span class="sep"></span>
+                        <span>Last deployed: <span th:text="${project.lastDeployed}">Oct 25, 2026 14:32</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-card">
+                    <svg class="icon"><use href="#i-globe"></use></svg>
+                    <div style="min-width:0">
+                        <div class="label">Application URL</div>
+                        <div class="value">
+                            <a th:href="${project.appUrl}" th:text="${project.appUrl}" target="_blank" rel="noopener">https://myapp.example.com</a>
+                            <a th:href="${project.appUrl}" target="_blank" rel="noopener" aria-label="Open application">
+                                <svg class="icon"><use href="#i-external"></use></svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <svg class="icon"><use href="#i-git-branch"></use></svg>
+                    <div style="min-width:0">
+                        <div class="label">Repository</div>
+                        <div class="value">
+                            <span class="truncate" th:text="${project.gitUrl}">git@github.com:myorg/myapp.git</span>
+                            <button class="copy-btn" type="button" th:data-copy="${project.gitUrl}" title="Copy repository URL">
+                                <svg class="icon"><use href="#i-copy"></use></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <svg class="icon"><use href="#i-tag"></use></svg>
+                    <div style="min-width:0">
+                        <div class="label">Branch</div>
+                        <div class="value" th:text="${project.gitRef}">main</div>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <svg class="icon"><use href="#i-tag"></use></svg>
+                    <div style="min-width:0">
+                        <div class="label">Subdomain</div>
+                        <div class="value">
+                            <span th:text="${project.subdomain}">myapp</span>
+                            <button class="copy-btn" type="button" th:data-copy="${project.subdomain}" title="Copy subdomain">
+                                <svg class="icon"><use href="#i-copy"></use></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="toggle-bar">
+                <label class="toggle-item">
+                    <span class="switch">
+                        <input type="checkbox" data-toggle="enableApplication" th:checked="${project.toggles.enableApplication}">
+                        <span class="track"></span>
+                    </span>
+                    <span>Enable Application</span>
+                </label>
+                <label class="toggle-item">
+                    <span class="switch">
+                        <input type="checkbox" data-toggle="enableHttps" th:checked="${project.toggles.enableHttps}">
+                        <span class="track"></span>
+                    </span>
+                    <span>Enable HTTPS</span>
+                </label>
+                <label class="toggle-item">
+                    <span class="switch">
+                        <input type="checkbox" data-toggle="autoDeploy" th:checked="${project.toggles.autoDeploy}">
+                        <span class="track"></span>
+                    </span>
+                    <span>Auto Deploy (Webhook)</span>
+                </label>
+                <label class="toggle-item">
+                    <span class="switch">
+                        <input type="checkbox" data-toggle="accessLogs" th:checked="${project.toggles.accessLogs}">
+                        <span class="track"></span>
+                    </span>
+                    <span>Access Logs</span>
+                </label>
+                <label class="toggle-item">
+                    <span class="switch">
+                        <input type="checkbox" data-toggle="analytics" th:checked="${project.toggles.analytics}">
+                        <span class="track"></span>
+                    </span>
+                    <span>Analytics</span>
+                </label>
+            </div>
+        </section>
+
+        <nav class="tabs" aria-label="Project sections">
+            <button class="tab active" type="button" data-tab="overview">
+                <svg class="icon"><use href="#i-overview"></use></svg> Overview
+            </button>
+            <button class="tab" type="button" data-tab="deploy">
+                <svg class="icon"><use href="#i-deploy"></use></svg> Deploy
+            </button>
+            <button class="tab" type="button" data-tab="configuration">
+                <svg class="icon"><use href="#i-sliders"></use></svg> Configuration
+            </button>
+            <button class="tab" type="button" data-tab="files">
+                <svg class="icon"><use href="#i-files"></use></svg> Files
+            </button>
+            <button class="tab" type="button" data-tab="domains">
+                <svg class="icon"><use href="#i-domains"></use></svg> Domains &amp; SSL
+            </button>
+            <button class="tab" type="button" data-tab="environment">
+                <svg class="icon"><use href="#i-env"></use></svg> Environment
+            </button>
+            <button class="tab" type="button" data-tab="monitoring">
+                <svg class="icon"><use href="#i-monitoring"></use></svg> Monitoring
+            </button>
+            <button class="tab" type="button" data-tab="history">
+                <svg class="icon"><use href="#i-history"></use></svg> History
+            </button>
+        </nav>
+
+        <!-- ===================== OVERVIEW ===================== -->
+        <section class="tab-panel active" id="tab-overview">
+            <div class="overview-grid">
+                <div class="overview-left">
+                    <article class="card overview-card">
+                        <div class="section-head">
+                            <span class="section-icon"><svg class="icon"><use href="#i-document"></use></svg></span>
+                            <h2 class="section-title">Project Overview</h2>
+                            <div class="spacer"></div>
+                            <button class="btn ghost" type="button" onclick="activateTab('configuration')">
+                                <svg class="icon"><use href="#i-edit"></use></svg> Edit
+                            </button>
+                        </div>
+                        <div class="section-body">
+                            <div class="detail-grid">
+                                <dl class="detail-list">
+                                    <div class="detail-row"><dt>Name</dt><dd th:text="${project.name}">myapp</dd></div>
+                                    <div class="detail-row"><dt>Description</dt><dd th:text="${project.description}">Main web application</dd></div>
+                                    <div class="detail-row"><dt>Server</dt><dd th:text="${project.serverName}">Production Server</dd></div>
+                                    <div class="detail-row">
+                                        <dt>Application URL</dt>
+                                        <dd><a th:href="${project.appUrl}" th:text="${project.appUrl}" target="_blank" rel="noopener">https://myapp.example.com</a></dd>
+                                    </div>
+                                </dl>
+                                <dl class="detail-list">
+                                    <div class="detail-row"><dt>Runtime User</dt><dd th:text="${project.runtimeUser}">myapp</dd></div>
+                                    <div class="detail-row"><dt>Working Directory</dt><dd th:text="${project.workingDirectory}">/opt/apps/myapp</dd></div>
+                                    <div class="detail-row">
+                                        <dt>Repository</dt>
+                                        <dd>
+                                            <span th:text="${project.gitUrl}">git@github.com:myorg/myapp.git</span>
+                                            <button class="copy-btn" type="button" th:data-copy="${project.gitUrl}" style="margin-left:4px" title="Copy repository URL">
+                                                <svg class="icon"><use href="#i-copy"></use></svg>
+                                            </button>
+                                        </dd>
+                                    </div>
+                                    <div class="detail-row"><dt>Branch</dt><dd th:text="${project.gitRef}">main</dd></div>
+                                    <div class="detail-row">
+                                        <dt>Auto Deploy</dt>
+                                        <dd>
+                                            <span class="status-inline" th:if="${project.toggles.autoDeploy}">Enabled</span>
+                                            <span class="muted" th:unless="${project.toggles.autoDeploy}">Disabled</span>
+                                        </dd>
+                                    </div>
+                                    <div class="detail-row">
+                                        <dt>Last Deployment</dt>
+                                        <dd>
+                                            <span th:text="${project.lastDeployed}">Oct 25, 2026 14:32</span>
+                                            <a href="#history" class="inline-link" onclick="activateTab('history');return false;">View History</a>
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card quick-card">
+                        <div class="section-head">
+                            <span class="section-icon"><svg class="icon"><use href="#i-rocket"></use></svg></span>
+                            <h2 class="section-title">Quick Actions</h2>
+                        </div>
+                        <div class="quick-actions">
+                            <button class="btn primary" type="button" onclick="deployNow()">
+                                <svg class="icon"><use href="#i-play"></use></svg> Deploy Now
+                            </button>
+                            <button class="btn" type="button" onclick="runtimeAction('restart')">
+                                <svg class="icon"><use href="#i-refresh"></use></svg> Restart
+                            </button>
+                            <button class="btn" type="button" onclick="runtimeAction('stop')">
+                                <svg class="icon"><use href="#i-stop"></use></svg> Stop
+                            </button>
+                            <button class="btn" type="button" onclick="scrollToLogs()">
+                                <svg class="icon"><use href="#i-file-logs"></use></svg> View Logs
+                            </button>
+                        </div>
+                        <div class="quick-actions open-url">
+                            <a class="btn" th:href="${project.appUrl}" target="_blank" rel="noopener">
+                                <svg class="icon"><use href="#i-external"></use></svg> Open URL
+                            </a>
+                        </div>
+                    </article>
+                </div>
+
+                <aside class="log-console" id="logConsoleSection">
+                    <div class="log-head">
+                        <svg class="icon"><use href="#i-terminal"></use></svg>
+                        <span class="title">Log Console</span>
+                        <span class="spacer"></span>
+                        <button class="log-clear" type="button" onclick="clearConsole()">Clear</button>
+                    </div>
+                    <div class="log-body" id="logConsole"
+                         th:attr="data-deployment=${latestDeploymentId},data-last=${logLastSequence},data-state=${latestState}">
+                        <div class="log-line" th:each="line : ${logs}">
+                            <span class="log-time" th:text="${line.time}">14:32:10</span>
+                            <span class="log-level" th:classappend="${#strings.toLowerCase(line.level)}" th:text="${line.level}">INFO</span>
+                            <span class="log-msg" th:text="${line.message}">Starting deployment</span>
+                        </div>
+                        <div class="log-empty" th:if="${#lists.isEmpty(logs)}">No deployment logs yet. Press Deploy Now to start a deployment.</div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <!-- ===================== DEPLOY ===================== -->
+        <section class="tab-panel" id="tab-deploy">
+            <div class="grid-2">
+                <article class="card panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Deploy</h2>
+                            <p>Build and activate a new release from a pinned configuration revision.</p>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="deployRef">Git ref override <span class="hint">(optional — branch, tag or commit)</span></label>
+                        <input id="deployRef" class="input" placeholder="main" autocomplete="off">
+                    </div>
+                    <div class="form-actions" style="justify-content:flex-start">
+                        <button class="btn primary" type="button" onclick="deployNowFromForm()">
+                            <svg class="icon"><use href="#i-play"></use></svg> Deploy Now
+                        </button>
+                        <span class="muted" style="font-size:12.5px;align-self:center">Deployments are serialized per project.</span>
+                    </div>
+                    <div class="section-gap" th:if="${lastDeployment != null}">
+                        <div class="panel-head" style="margin-bottom:12px">
+                            <h2 style="font-size:16px">Latest deployment</h2>
+                            <div class="spacer"></div>
+                            <span class="badge" th:classappend="' ' + ${lastDeployment.stateClass}" th:text="${lastDeployment.stateLabel}">Succeeded</span>
+                        </div>
+                        <div class="steps">
+                            <div class="step" th:each="step : ${steps}"
+                                 th:classappend="${step.state == 'FAILED' ? 'failed' : (step.state == 'DONE' ? 'done' : 'running')}">
+                                <div class="step-rail"><span class="step-dot"></span><span class="step-line"></span></div>
+                                <div class="step-body">
+                                    <div class="step-name" th:text="${step.name}">VALIDATING</div>
+                                    <div class="step-detail">
+                                        <span th:if="${step.detail}" th:text="${step.detail}">Validated</span>
+                                        <span class="step-time" th:text="${step.finished != null ? step.finished : step.started}">14:32:10</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="card panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Release</h2>
+                            <p>Active release and recent deploy history.</p>
+                        </div>
+                    </div>
+                    <div th:if="${activeRelease != null}" style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                        <span class="tag blue" th:text="${activeRelease.version}">v1.1.0</span>
+                        <span class="mono" th:text="${activeRelease.commit}">a1b2c3d</span>
+                        <span class="muted" style="font-size:12.5px" th:text="${activeRelease.created}">Oct 25, 2026 14:32</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Deployment</th><th>State</th><th>Commit</th><th>Started</th></tr></thead>
+                            <tbody>
+                            <tr th:each="d : ${deployments}">
+                                <td><strong th:text="'#' + ${d.id}">#3</strong> <span class="muted" th:text="${d.trigger}">DASHBOARD</span></td>
+                                <td><span class="badge" th:classappend="' ' + ${d.stateClass}" th:text="${d.stateLabel}">Succeeded</span></td>
+                                <td class="mono" th:text="${d.commit}">a1b2c3d</td>
+                                <td class="muted" th:text="${d.created}">Oct 25, 2026 14:32</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(deployments)}"><td colspan="4" class="empty-state">No deployments yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- ===================== CONFIGURATION ===================== -->
+        <section class="tab-panel" id="tab-configuration">
+            <article class="card panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>Configuration</h2>
+                        <p>Saving creates an immutable revision. Deployments pin the revision they start with.</p>
+                    </div>
+                </div>
+                <form id="configForm" onsubmit="event.preventDefault(); saveConfiguration();">
+                    <div class="form-grid">
+                        <div class="field span-2">
+                            <label for="gitUrl">Git URL</label>
+                            <input id="gitUrl" name="gitUrl" class="input" th:value="${config.gitUrl}" required>
+                        </div>
+                        <div class="field">
+                            <label for="gitRef">Git ref</label>
+                            <input id="gitRef" name="gitRef" class="input" th:value="${config.gitRef}" required>
+                        </div>
+                        <div class="field">
+                            <label for="subdomain">Subdomain</label>
+                            <input id="subdomain" name="subdomain" class="input" th:value="${config.subdomain}" required>
+                        </div>
+                        <div class="field">
+                            <label for="runtimeUser">Runtime user</label>
+                            <input id="runtimeUser" name="runtimeUser" class="input" th:value="${config.runtimeUser}" required>
+                        </div>
+                        <div class="field">
+                            <label for="workingDirectory">Working directory</label>
+                            <input id="workingDirectory" name="workingDirectory" class="input" th:value="${config.workingDirectory}" required>
+                        </div>
+                        <div class="field">
+                            <label for="internalPort">Internal port</label>
+                            <input id="internalPort" name="internalPort" type="number" min="1" max="65535" class="input" th:value="${config.internalPort}" required>
+                        </div>
+                        <div class="field">
+                            <label for="startCommand">Start command</label>
+                            <input id="startCommand" name="startCommand" class="input" th:value="${config.startCommand}" required>
+                        </div>
+                        <div class="field span-2">
+                            <label for="buildScript">Build script</label>
+                            <textarea id="buildScript" name="buildScript" class="input" th:text="${config.buildScript}" placeholder="npm ci &amp;&amp; npm run build"></textarea>
+                        </div>
+                        <div class="field span-2">
+                            <label for="prepareScript">Prepare script</label>
+                            <textarea id="prepareScript" name="prepareScript" class="input" th:text="${config.prepareScript}" placeholder="Optional, runs after file transfer"></textarea>
+                        </div>
+                        <div class="field">
+                            <label for="healthPath">Health-check path</label>
+                            <input id="healthPath" name="healthPath" class="input" th:value="${config.healthPath}" required>
+                        </div>
+                        <div class="field">
+                            <label for="healthExpected">Expected HTTP status</label>
+                            <input id="healthExpected" name="healthExpected" type="number" class="input" th:value="${config.healthExpected}" required>
+                        </div>
+                        <div class="field">
+                            <label for="healthTimeout">Health-check timeout (s)</label>
+                            <input id="healthTimeout" name="healthTimeout" type="number" class="input" th:value="${config.healthTimeout}" required>
+                        </div>
+                        <div class="field">
+                            <label for="healthRetries">Health-check retries</label>
+                            <input id="healthRetries" name="healthRetries" type="number" class="input" th:value="${config.healthRetries}" required>
+                        </div>
+                        <div class="field">
+                            <label for="healthInterval">Retry interval (s)</label>
+                            <input id="healthInterval" name="healthInterval" type="number" class="input" th:value="${config.healthInterval}" required>
+                        </div>
+                        <div class="field">
+                            <label for="logRetentionDays">Deployment log retention (days)</label>
+                            <input id="logRetentionDays" name="logRetentionDays" type="number" class="input" th:value="${config.logRetentionDays}" required>
+                        </div>
+                        <div class="field">
+                            <label for="analyticsRetentionDays">Analytics retention (days)</label>
+                            <input id="analyticsRetentionDays" name="analyticsRetentionDays" type="number" class="input" th:value="${config.analyticsRetentionDays}" required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn primary" type="submit">Save Configuration</button>
+                    </div>
+                </form>
+            </article>
+        </section>
+
+        <!-- ===================== FILES ===================== -->
+        <section class="tab-panel" id="tab-files">
+            <article class="card panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>My Files</h2>
+                        <p>Stored outside the web root and addressed by opaque IDs. Sensitive files are encrypted at rest.</p>
+                    </div>
+                    <div class="spacer"></div>
+                    <label class="btn primary upload-btn">
+                        <svg class="icon"><use href="#i-upload"></use></svg> Upload File
+                        <input type="file" name="file" onchange="uploadFile(this, 'files')">
+                    </label>
+                </div>
+                <div class="table-wrap">
+                    <table class="file-table">
+                        <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        <tr th:each="file : ${files}">
+                            <td><strong th:text="${file.name}">config.env</strong></td>
+                            <td th:text="${file.size}">2.4 KB</td>
+                            <td class="muted" th:text="${file.uploaded}">Oct 20, 2026 10:12</td>
+                            <td>
+                                <div class="actions">
+                                    <a class="icon-btn" th:href="@{'/api/v1/files/' + ${file.id} + '/content'}" title="Download">
+                                        <svg class="icon"><use href="#i-download"></use></svg>
+                                    </a>
+                                    <button class="icon-btn" type="button" data-action="delete-file" th:attr="data-file-id=${file.id}" title="Delete">
+                                        <svg class="icon"><use href="#i-trash"></use></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(files)}"><td colspan="4" class="empty-state">No files uploaded yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <!-- ===================== DOMAINS ===================== -->
+        <section class="tab-panel" id="tab-domains">
+            <div class="grid-2">
+                <article class="card panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Hostnames</h2>
+                            <p>Managed namespace: <span class="mono" th:text="${managedNamespace}">example.com</span></p>
+                        </div>
+                    </div>
+                    <form class="inline-form" onsubmit="event.preventDefault(); addDomain(this);">
+                        <div class="field">
+                            <label for="newHostname">Hostname</label>
+                            <input id="newHostname" name="hostname" class="input" placeholder="app.example.com" required>
+                        </div>
+                        <button class="btn" type="submit"><svg class="icon"><use href="#i-plus"></use></svg> Claim</button>
+                    </form>
+                    <div class="table-wrap section-gap">
+                        <table class="data">
+                            <thead><tr><th>Hostname</th><th>Certificate</th><th></th></tr></thead>
+                            <tbody>
+                            <tr th:each="h : ${hostnames}">
+                                <td><strong th:text="${h.hostname}">myapp.example.com</strong></td>
+                                <td class="muted" th:text="${h.certificateLabel}">Certificate #1 · 364 days left</td>
+                                <td>
+                                    <div class="row-actions">
+                                        <button class="icon-btn" type="button" data-action="delete-domain" th:attr="data-hostname=${h.hostname}" title="Unclaim">
+                                            <svg class="icon"><use href="#i-trash"></use></svg>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(hostnames)}"><td colspan="3" class="empty-state">No hostnames claimed.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="card panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Certificates</h2>
+                            <p>Private keys are stored as sensitive files and never returned by read APIs.</p>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Certificate</th><th>Names</th><th>Expires</th></tr></thead>
+                            <tbody>
+                            <tr th:each="c : ${certificates}">
+                                <td><strong th:text="'#' + ${c.id}">#1</strong></td>
+                                <td class="muted" th:text="${c.hostnames}">myapp.example.com</td>
+                                <td><span class="tag" th:classappend="${c.daysRemaining <= 14 ? 'amber' : 'green'}" th:text="${c.notAfter}">Oct 20, 2027 10:00</span></td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(certificates)}"><td colspan="3" class="empty-state">No certificates registered.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- ===================== ENVIRONMENT ===================== -->
+        <section class="tab-panel" id="tab-environment">
+            <article class="card panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>Environment</h2>
+                        <p>Literal values are non-secret. Secrets are credential references, injected as a 0600 env file at runtime.</p>
+                    </div>
+                </div>
+                <form class="inline-form" onsubmit="event.preventDefault(); addEnvironment(this);">
+                    <div class="field" style="flex:0 0 190px">
+                        <label for="envName">Name</label>
+                        <input id="envName" name="name" class="input" placeholder="DATABASE_URL" required>
+                    </div>
+                    <div class="field">
+                        <label for="envValue">Literal value</label>
+                        <input id="envValue" name="value" class="input" placeholder="non-secret value">
+                    </div>
+                    <div class="field" style="flex:0 0 170px">
+                        <label for="envCredential">Or credential ID</label>
+                        <input id="envCredential" name="credentialId" type="number" class="input" placeholder="optional">
+                    </div>
+                    <button class="btn" type="submit"><svg class="icon"><use href="#i-plus"></use></svg> Add</button>
+                </form>
+                <div class="table-wrap section-gap">
+                    <table class="data">
+                        <thead><tr><th>Name</th><th>Value</th><th>Kind</th></tr></thead>
+                        <tbody>
+                        <tr th:each="entry : ${environment}">
+                            <td class="mono" th:text="${entry.name}">NODE_ENV</td>
+                            <td class="mono" th:text="${entry.value}">production</td>
+                            <td>
+                                <span class="tag" th:classappend="${entry.secret ? 'amber' : 'blue'}" th:text="${entry.secret ? 'Credential' : 'Literal'}">Literal</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(environment)}"><td colspan="3" class="empty-state">No environment entries.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <!-- ===================== MONITORING ===================== -->
+        <section class="tab-panel" id="tab-monitoring">
+            <article class="card panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>Monitoring</h2>
+                        <p>Best-effort telemetry. Sampling defaults to 60 seconds and never sits in the request or deployment path.</p>
+                    </div>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric">
+                        <div class="label"><svg class="icon icon-sm"><use href="#i-monitoring"></use></svg> CPU</div>
+                        <div class="value"><span th:text="${metrics.cpu}">34</span><small>%</small></div>
+                        <div class="bar"><span th:style="'width:' + ${metrics.cpu} + '%'"></span></div>
+                        <div class="foot">Last 24 hours</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label"><svg class="icon icon-sm"><use href="#i-database"></use></svg> Memory</div>
+                        <div class="value"><span th:text="${metrics.memory}">62</span><small>%</small></div>
+                        <div class="bar"><span th:style="'width:' + ${metrics.memory} + '%'"></span></div>
+                        <div class="foot">Resident memory</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label"><svg class="icon icon-sm"><use href="#i-server"></use></svg> Disk</div>
+                        <div class="value"><span th:text="${metrics.disk}">48</span><small>%</small></div>
+                        <div class="bar"><span th:style="'width:' + ${metrics.disk} + '%'"></span></div>
+                        <div class="foot">Root volume</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label"><svg class="icon icon-sm"><use href="#i-globe"></use></svg> Requests</div>
+                        <div class="value" th:text="${metrics.requests}">3124</div>
+                        <div class="foot"><span th:text="${metrics.pageViews}">1720</span> page views · <span th:text="${metrics.clicks}">430</span> clicks</div>
+                    </div>
+                </div>
+                <div class="grid-3 section-gap">
+                    <div class="metric">
+                        <div class="label">Health</div>
+                        <div class="value" style="font-size:20px" th:text="${metrics.healthy}">Healthy</div>
+                        <div class="foot">Latency <span th:text="${metrics.latency}">182</span> ms</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Error responses (5xx)</div>
+                        <div class="value" th:text="${metrics.errors}">2</div>
+                        <div class="foot">From access-log ingestion</div>
+                    </div>
+                    <div class="metric">
+                        <div class="label">Page views</div>
+                        <div class="value" th:text="${metrics.pageViews}">1720</div>
+                        <div class="foot">Tracking script only</div>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <!-- ===================== HISTORY ===================== -->
+        <section class="tab-panel" id="tab-history">
+            <article class="card panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>Deployment History</h2>
+                        <p>Each deployment pins an immutable configuration revision and its release.</p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                        <tr><th>ID</th><th>State</th><th>Trigger</th><th>Commit</th><th>Started</th><th>Duration</th><th>Release</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="d : ${deployments}">
+                            <td><strong th:text="'#' + ${d.id}">#3</strong></td>
+                            <td><span class="badge" th:classappend="' ' + ${d.stateClass}" th:text="${d.stateLabel}">Succeeded</span></td>
+                            <td><span class="tag" th:text="${d.trigger}">DASHBOARD</span></td>
+                            <td class="mono" th:text="${d.commit}">a1b2c3d</td>
+                            <td class="muted" th:text="${d.created}">Oct 25, 2026 14:32</td>
+                            <td th:text="${d.duration}">14s</td>
+                            <td>
+                                <span class="muted" th:if="${d.kind == 'ROLLBACK'}" th:text="'rollback of #' + ${d.rollbackOf}">rollback</span>
+                                <span class="muted" th:unless="${d.kind == 'ROLLBACK'}">—</span>
+                            </td>
+                            <td>
+                                <div class="row-actions">
+                                    <button class="btn tiny" type="button" th:if="${d.canRollback}"
+                                            data-action="rollback" th:attr="data-deployment-id=${d.id}">Rollback</button>
+                                    <button class="btn tiny" type="button" th:if="${d.canCancel}"
+                                            data-action="cancel" th:attr="data-deployment-id=${d.id}">Cancel</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(deployments)}"><td colspan="8" class="empty-state">No deployments yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+    </div>
+</main>
+
+<!-- ===================== MY FILES MODAL ===================== -->
+<div class="modal-backdrop" id="filesModal" hidden onclick="backdropClose(event, 'filesModal')">
+    <div class="modal wide" role="dialog" aria-modal="true" aria-label="My Files" onclick="event.stopPropagation()">
+        <div class="modal-head">
+            <svg class="icon"><use href="#i-folder"></use></svg>
+            <h3>My Files</h3>
+            <div class="spacer"></div>
+            <button class="modal-close" type="button" onclick="closeModal('filesModal')" aria-label="Close">
+                <svg class="icon"><use href="#i-x"></use></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="upload-row">
+                <label class="btn primary upload-btn">
+                    <svg class="icon"><use href="#i-upload"></use></svg> Upload File
+                    <input type="file" name="file" onchange="uploadFile(this, 'modal')">
+                </label>
+            </div>
+            <table class="file-table">
+                <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                <tbody>
+                <tr th:each="file : ${files}">
+                    <td th:text="${file.name}">config.env</td>
+                    <td th:text="${file.size}">2.4 KB</td>
+                    <td class="muted" th:text="${file.uploaded}">Oct 20, 2026 10:12</td>
+                    <td>
+                        <div class="actions">
+                            <a class="icon-btn" th:href="@{'/api/v1/files/' + ${file.id} + '/content'}" title="Download">
+                                <svg class="icon"><use href="#i-download"></use></svg>
+                            </a>
+                            <button class="icon-btn" type="button" data-action="delete-file" th:attr="data-file-id=${file.id}" title="Delete">
+                                <svg class="icon"><use href="#i-trash"></use></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(files)}"><td colspan="4" class="empty-state">No files uploaded yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== SETTINGS MODAL ===================== -->
+<div class="modal-backdrop" id="settingsModal" hidden onclick="backdropClose(event, 'settingsModal')">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Settings" onclick="event.stopPropagation()">
+        <div class="modal-head">
+            <svg class="icon"><use href="#i-settings"></use></svg>
+            <h3>Settings</h3>
+            <div class="spacer"></div>
+            <button class="modal-close" type="button" onclick="closeModal('settingsModal')" aria-label="Close">
+                <svg class="icon"><use href="#i-x"></use></svg>
+            </button>
+        </div>
+        <div class="modal-tabs">
+            <button class="modal-tab active" type="button" data-pane="profilePane">Profile</button>
+            <button class="modal-tab" type="button" data-pane="securityPane">Security</button>
+            <button class="modal-tab" type="button" data-pane="notificationsPane">Notifications</button>
+        </div>
+        <form class="modal-body" id="settingsForm" onsubmit="event.preventDefault(); saveSettings();">
+            <div class="modal-pane active" id="profilePane">
+                <div class="settings-grid">
+                    <div class="field">
+                        <label for="settingsName">Full Name</label>
+                        <input id="settingsName" class="input" th:value="${user.name}">
+                    </div>
+                    <div class="field">
+                        <label for="settingsEmail">Email</label>
+                        <input id="settingsEmail" type="email" class="input" th:value="${user.email}"
+                               th:attr="data-original=${user.email}">
+                    </div>
+                </div>
+                <div class="password-grid" style="margin-top:14px">
+                    <div class="field">
+                        <label for="currentPassword">Current Password</label>
+                        <input id="currentPassword" type="password" class="input" autocomplete="current-password">
+                    </div>
+                    <div class="field">
+                        <label for="newPassword">New Password</label>
+                        <input id="newPassword" type="password" class="input" autocomplete="new-password">
+                    </div>
+                    <div class="field">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input id="confirmPassword" type="password" class="input" autocomplete="new-password">
+                    </div>
+                </div>
+                <p class="settings-note">Changing your email requires verification and OTP step-up. Passwords must be at least 12 characters; changing one revokes all refresh sessions.</p>
+            </div>
+            <div class="modal-pane" id="securityPane">
+                <div class="notify-list">
+                    <div class="notify-item">
+                        <svg class="icon" style="color:var(--blue);margin-top:2px"><use href="#i-shield"></use></svg>
+                        <span><span class="title">Sensitive actions are protected</span><br><span class="desc">Deleting files, changing security settings and writing environment secrets require a single-use OTP step-up grant.</span></span>
+                    </div>
+                    <div class="notify-item">
+                        <svg class="icon" style="color:var(--blue);margin-top:2px"><use href="#i-lock"></use></svg>
+                        <span><span class="title">Sessions</span><br><span class="desc">Password changes and resets revoke all refresh tokens. Access tokens expire after 15 minutes.</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-pane" id="notificationsPane">
+                <div class="notify-list">
+                    <label class="notify-item">
+                        <input id="notifyDeployments" type="checkbox" th:checked="${user.notifyDeployments}">
+                        <span><span class="title">Deployment notifications</span><br><span class="desc">Succeeded, failed and rollback outcomes for projects you belong to.</span></span>
+                    </label>
+                    <label class="notify-item">
+                        <input id="notifyAlerts" type="checkbox" th:checked="${user.notifyAlerts}">
+                        <span><span class="title">Alert notifications</span><br><span class="desc">Firing and recovery notifications for monitoring rules.</span></span>
+                    </label>
+                </div>
+            </div>
+        </form>
+        <div class="modal-foot">
+            <button class="btn" type="button" onclick="closeModal('settingsModal')">Cancel</button>
+            <button class="btn primary" type="button" onclick="saveSettings()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== STEP-UP MODAL ===================== -->
+<div class="modal-backdrop" id="stepUpModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Verify your identity" style="max-width:400px">
+        <div class="modal-head">
+            <svg class="icon"><use href="#i-shield"></use></svg>
+            <h3>Verify it's you</h3>
+            <div class="spacer"></div>
+            <button class="modal-close" type="button" onclick="closeStepUp()" aria-label="Close">
+                <svg class="icon"><use href="#i-x"></use></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="stepup-hint" id="stepUpHint">We sent a 6-digit verification code to your email. It expires in 5 minutes.</p>
+            <div class="field" style="margin-top:14px">
+                <label for="stepUpCode">Verification code</label>
+                <input id="stepUpCode" class="input stepup-code" inputmode="numeric" maxlength="6" placeholder="000000">
+            </div>
+            <p class="stepup-hint" style="margin-top:12px">
+                Codes are delivered by email and never written to logs or audit.
+                <a th:if="${demoMode}" href="/dashboard/dev-mailbox" target="_blank" rel="noopener">Open dev mailbox</a>
+            </p>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" type="button" onclick="closeStepUp()">Cancel</button>
+            <button class="btn primary" type="button" id="stepUpVerify" onclick="completeStepUp()">Verify</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
